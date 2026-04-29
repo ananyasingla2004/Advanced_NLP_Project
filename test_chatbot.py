@@ -91,7 +91,7 @@ def test_chatbot_initialization():
     try:
         from medical_chatbot import MedicalChatbot
         
-        print("Loading dataset and building TF-IDF vectors...")
+        print("Loading dataset and building BERT embeddings...")
         print("(This may take 30-60 seconds on first run)")
         
         chatbot = MedicalChatbot('symptom_sentence_dataset_with_department.csv')

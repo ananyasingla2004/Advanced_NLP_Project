@@ -7,15 +7,13 @@ matches your symptoms with medical conditions, and responds in your original lan
 Libraries Used:
 - langdetect: Fast language detection (supports 55+ languages)
 - googletrans: Google Translate API for free translation
-- scikit-learn: TF-IDF vectorizer and cosine similarity for text matching
+- transformers + torch: BERT embeddings for semantic text matching
 - pandas: Data manipulation and analysis
 - numpy: Numerical operations
 """
 
 import pandas as pd
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 import warnings
 from typing import Tuple, Dict, List
 
@@ -23,9 +21,11 @@ from typing import Tuple, Dict, List
 try:
     from langdetect import detect, detect_langs
     from googletrans import Translator
+    import torch
+    from transformers import AutoModel, AutoTokenizer
 except ImportError:
     print("ERROR: Required libraries not installed.")
-    print("Install them using: pip install langdetect googletrans")
+    print("Install them using: pip install langdetect googletrans transformers torch")
     exit(1)
 
 warnings.filterwarnings('ignore')
@@ -35,6 +35,8 @@ warnings.filterwarnings('ignore')
 # ============================================================================
 SIMILARITY_THRESHOLD = 0.3  # Minimum similarity score (0-1) to consider a match
 TOP_N_MATCHES = 3  # Number of top matches to consider
+BERT_MODEL_NAME = "google/bert_uncased_L-2_H-128_A-2"
+BERT_BATCH_SIZE = 32
 SUPPORTED_LANGUAGES = {
     'en': 'English',
     'es': 'Spanish',
@@ -124,7 +126,7 @@ class LanguageProcessor:
 # SYMPTOM MATCHING ENGINE
 # ============================================================================
 class SymptomMatcher:
-    """Handles symptom matching using TF-IDF and cosine similarity."""
+    """Handles symptom matching using BERT embeddings and cosine similarity."""
     
     def __init__(self, dataset_path: str):
         """
@@ -135,22 +137,51 @@ class SymptomMatcher:
         """
         print("Loading dataset...")
         self.df = pd.read_csv(dataset_path)
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        print(f"Loading BERT model ({BERT_MODEL_NAME}) on {self.device}...")
+        self.tokenizer = AutoTokenizer.from_pretrained(BERT_MODEL_NAME)
+        self.model = AutoModel.from_pretrained(BERT_MODEL_NAME).to(self.device)
+        self.model.eval()
         
-        # Create TF-IDF vectorizer for symptom descriptions
-        print("Building TF-IDF vectors (this may take a moment)...")
-        self.vectorizer = TfidfVectorizer(
-            max_features=5000,           # Limit vocabulary size
-            min_df=1,                    # Minimum document frequency
-            max_df=0.9,                  # Maximum document frequency
-            ngram_range=(1, 2),          # Use unigrams and bigrams
-            stop_words='english',        # Remove common English words
-            lowercase=True
-        )
-        
-        # Fit vectorizer on symptom descriptions
-        self.tfidf_matrix = self.vectorizer.fit_transform(self.df['input_text'])
+        # Build sentence embeddings for all symptom descriptions once at startup.
+        print("Building BERT embeddings (this may take a moment)...")
+        self.embedding_matrix = self._encode_texts(self.df['input_text'].fillna('').astype(str).tolist())
         print(f"✓ Dataset loaded: {len(self.df)} records")
-        print(f"✓ TF-IDF matrix built: {self.tfidf_matrix.shape}")
+        print(f"✓ BERT embedding matrix built: {self.embedding_matrix.shape}")
+
+    def _mean_pool(self, model_output, attention_mask):
+        """Mean-pool token embeddings using the attention mask."""
+        token_embeddings = model_output.last_hidden_state
+        mask = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+        summed = (token_embeddings * mask).sum(dim=1)
+        counts = mask.sum(dim=1).clamp(min=1e-9)
+        return summed / counts
+
+    def _encode_texts(self, texts: List[str]) -> np.ndarray:
+        """Encode texts into normalized BERT embeddings."""
+        all_embeddings = []
+
+        for start in range(0, len(texts), BERT_BATCH_SIZE):
+            batch_texts = texts[start:start + BERT_BATCH_SIZE]
+            encoded_inputs = self.tokenizer(
+                batch_texts,
+                padding=True,
+                truncation=True,
+                max_length=128,
+                return_tensors='pt'
+            )
+            encoded_inputs = {key: value.to(self.device) for key, value in encoded_inputs.items()}
+
+            with torch.no_grad():
+                model_output = self.model(**encoded_inputs)
+
+            batch_embeddings = self._mean_pool(model_output, encoded_inputs['attention_mask'])
+            batch_embeddings = torch.nn.functional.normalize(batch_embeddings, p=2, dim=1)
+            all_embeddings.append(batch_embeddings.cpu().numpy().astype(np.float32))
+
+        return np.vstack(all_embeddings)
     
     def find_matching_diseases(self, query: str, top_n: int = TOP_N_MATCHES) -> List[Dict]:
         """
@@ -163,11 +194,9 @@ class SymptomMatcher:
         Returns:
             List[Dict]: List of matches with disease, department, and similarity score
         """
-        # Vectorize the query
-        query_vector = self.vectorizer.transform([query])
-        
-        # Calculate cosine similarity with all dataset entries
-        similarities = cosine_similarity(query_vector, self.tfidf_matrix)[0]
+        # Encode the query and compare it with the dataset embeddings.
+        query_embedding = self._encode_texts([query])[0]
+        similarities = np.dot(self.embedding_matrix, query_embedding)
         
         # Get top N matches
         top_indices = np.argsort(similarities)[-top_n:][::-1]
