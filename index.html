@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Symptom Chatbot</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <h1>🏥 Medical Symptom Chatbot</h1>
+                <p>Describe your symptoms and get instant medical guidance</p>
+            </div>
+            <div class="status-indicator">
+                <span id="status-dot" class="status-dot"></span>
+                <span id="status-text">Connecting...</span>
+            </div>
+        </div>
+
+        <!-- Main Chat Container -->
+        <div class="chat-container">
+            <!-- Messages Area -->
+            <div id="messages" class="messages">
+                <div class="message bot-message">
+                    <div class="message-content">
+                        <p><strong>Welcome to Medical Symptom Chatbot! 👋</strong></p>
+                        <p>I'm an AI-powered medical assistant that can help identify potential diseases based on your symptoms. I support multiple languages and can provide accurate department recommendations.</p>
+                        <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                            <strong>How to use:</strong> Simply describe your symptoms in any language, and I'll help analyze them.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-container">
+                <form id="chatForm" class="chat-form">
+                    <div class="input-wrapper">
+                        <input
+                            type="text"
+                            id="userInput"
+                            placeholder="Describe your symptoms here... (e.g., 'I have fever and cough')"
+                            class="chat-input"
+                            autocomplete="off"
+                        >
+                        <button type="submit" class="send-button" id="sendButton">
+                            <span>Send</span>
+                            <span class="send-icon">➤</span>
+                        </button>
+                    </div>
+                    <div class="input-hint">
+                        💡 Tip: You can describe symptoms in any language
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sidebar Info -->
+        <div class="sidebar">
+            <div class="info-panel">
+                <h3>ℹ️ About This Chatbot</h3>
+                <ul>
+                    <li>🌍 Multilingual support</li>
+                    <li>🔍 AI-powered analysis</li>
+                    <li>🏥 Department suggestions</li>
+                    <li>📊 Confidence scores</li>
+                </ul>
+            </div>
+
+            <div class="info-panel">
+                <h3>⚠️ Important Notice</h3>
+                <p>This chatbot provides informational guidance only and is not a substitute for professional medical advice. Always consult with a qualified healthcare provider for diagnosis and treatment.</p>
+            </div>
+
+            <div class="info-panel">
+                <h3>📞 Need Help?</h3>
+                <p>If you have technical issues or feedback, please contact support or check the documentation.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div id="loadingModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="spinner"></div>
+            <p>Analyzing your symptoms...</p>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="errorModal" class="modal hidden">
+        <div class="modal-content error">
+            <h3>⚠️ Error</h3>
+            <p id="errorMessage"></p>
+            <button onclick="closeErrorModal()" class="close-button">Close</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
