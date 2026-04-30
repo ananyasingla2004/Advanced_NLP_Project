@@ -729,7 +729,7 @@ class MedicalChatbot:
 # ============================================================================
 def main():
     import sys
-    dataset_path = '/kaggle/input/datasets/anoushkayadav15/dataset/symptom_sentence_dataset_with_department.csv'
+    dataset_path = 'symptom_sentence_dataset_with_department.csv'
     try:
         chatbot = MedicalChatbot(dataset_path)
     except FileNotFoundError:
