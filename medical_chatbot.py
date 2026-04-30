@@ -174,6 +174,13 @@ COMMON_DISEASE_PRIORS: Dict[str, List[str]] = {
 }
 
 
+# Flatten all common diseases into a set for fast lookup
+COMMON_DISEASE_SET = {
+    d.lower()
+    for diseases in COMMON_DISEASE_PRIORS.values()
+    for d in diseases
+}
+
 # ============================================================================
 # LANGUAGE DETECTION AND TRANSLATION
 # ============================================================================
@@ -588,7 +595,14 @@ class MedicalChatbot:
 
         # 3c — Gemini validation / reranking
         print(f"    → Running Gemini validation...")
-        matches = self.gemini_validator.validate(english_text, matches)
+        validated = self.gemini_validator.validate(english_text, matches)
+
+        # If Gemini failed → fallback ranking
+        if validated == matches:
+            print("⚠️ Gemini failed → applying fallback ranking")
+            matches = self.rerank_without_gemini(matches)
+        else:
+            matches = validated
 
         # Safety net: if Gemini wiped the list entirely, restore prior output
         if not matches:
@@ -689,13 +703,33 @@ class MedicalChatbot:
                 print(f"Error processing query: {e}")
                 continue
 
+    def rerank_without_gemini(self, matches: List[Dict]) -> List[Dict]:
+        def _norm(name):
+            return name.strip().lower()
+    
+        for m in matches:
+            name = _norm(m["disease"])
+            base = m["similarity"]
+    
+            if name in COMMON_DISEASE_SET:
+                # Strong boost for common diseases
+                adjusted = base + 0.4
+            else:
+                # Stronger penalty for rare
+                adjusted = base - 0.15
+    
+            # ✅ Clamp between 0 and 1
+            m["similarity"] = max(0.0, min(1.0, adjusted))
+    
+        matches.sort(key=lambda x: x["similarity"], reverse=True)
+        return matches
 
 # ============================================================================
 # MAIN
 # ============================================================================
 def main():
     import sys
-    dataset_path = 'symptom_sentence_dataset_with_department.csv'
+    dataset_path = '/kaggle/input/datasets/anoushkayadav15/dataset/symptom_sentence_dataset_with_department.csv'
     try:
         chatbot = MedicalChatbot(dataset_path)
     except FileNotFoundError:
